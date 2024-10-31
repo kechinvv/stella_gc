@@ -1,3 +1,6 @@
+#ifndef STELLA_GC_H
+#define STELLA_GC_H
+
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -54,3 +57,5 @@ void print_gc_state();
  * May be useful for debugging.
  */
 void print_gc_roots();
+
+#endif
