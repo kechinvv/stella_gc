@@ -5,7 +5,7 @@
 #include "runtime.h"
 #include "gc.h"
 
-#define MEM_FOR_GARBAGE 256
+#define MEM_FOR_GARBAGE 200
 
 /** Total allocated number of bytes (over the entire duration of the program). */
 int total_allocated_bytes = 0;
@@ -122,6 +122,8 @@ void gc_run(){
 
 
 void* gc_alloc(size_t size_in_bytes) {
+   printf("GC_ALLOC\n");
+
   if (next == NULL) {
       from_space = malloc(MEM_FOR_GARBAGE);
       to_space = malloc(MEM_FOR_GARBAGE);
@@ -135,13 +137,17 @@ void* gc_alloc(size_t size_in_bytes) {
   total_allocated_objects += 1;
   max_allocated_bytes = total_allocated_bytes;
   max_allocated_objects = total_allocated_objects;
-  
+
+  printf("BEFORE GC RUN\n");
+
 
   if (gc_collecting == 0 && last_added + size_in_bytes > limit) {
+      printf("GC RUN\n");
       gc_run();
   }
 
   if (last_added + size_in_bytes > limit) {  
+      printf("EXIT ENOMEM");
       exit(ENOMEM);
   }
 
@@ -153,9 +159,19 @@ void* gc_alloc(size_t size_in_bytes) {
     ptr_to_write = limit;
     limit -= size_in_bytes;
   }
-  gc_iter(size_in_bytes);
+  printf("GC_ITER\n");
 
-  return ptr_to_write;
+  if (gc_collecting == 1)
+  {
+      gc_iter(size_in_bytes);
+  }
+  
+
+  return ptr_to_write; 
+
+
+
+  //return malloc(size_in_bytes);
 }
 
 void print_gc_roots() {
@@ -174,6 +190,8 @@ void print_gc_alloc_stats() {
 }
 
 void print_gc_state() {
+  printf("GC_STATE\n");
+
   printf("To space start: %p \n", to_space);
   printf("Next: %p \n", next);
   printf("From space start: %p \n", from_space);
@@ -199,6 +217,8 @@ void gc_pop_root(void **ptr){
 }
 
 void gc_read_barrier(void *object, int field_index) {
+    printf("GC_READ_BARRIER\n");
+
   void* s_obj_f = ((stella_object *) object)->object_fields[field_index];
   if (gc_collecting && points_to_to_space(s_obj_f)) {  //old from space
       s_obj_f = forward(s_obj_f);
