@@ -49,7 +49,7 @@ void chase(stella_object* p){
   {
     stella_object* q = next;
     int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(p->object_header)+1;
-    for (int i = 0; i < fields_count; i++) next += sizeof(p->object_fields[i]);
+    for (int i = 0; i < fields_count; i++) next += sizeof(p->object_fields[i]); //todo + size of object? only pointers with same size or primitives?
     
 
     void* r = NULL;
