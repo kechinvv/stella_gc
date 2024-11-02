@@ -5,7 +5,7 @@
 #include "runtime.h"
 #include "gc.h"
 
-#define MEM_FOR_GARBAGE 200
+#define MEM_FOR_GARBAGE 100
 
 /** Total allocated number of bytes (over the entire duration of the program). */
 int total_allocated_bytes = 0;
@@ -49,7 +49,7 @@ void chase(stella_object* p){
   {
     stella_object* q = next;
     int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(p->object_header)+1;
-    for (int i = 0; i < fields_count; i++) next += sizeof(p->object_fields[i]); //todo + size of object? only pointers with same size or primitives?
+    next += sizeof(void *) * fields_count; //todo + size of object? only pointers with same size or primitives?
     
 
     void* r = NULL;
@@ -85,18 +85,26 @@ void* forward(void* p) {
 }
 
 void gc_iter(size_t size_in_bytes){
-  size_t forwarded = 0;
-  size_t before_size = last_added - from_space;
-  while (forwarded < size_in_bytes) {
-    stella_object *obj = scan;
-    obj = forward(obj);
-    forwarded = before_size - ((size_t) (last_added - from_space)); 
-    scan += forwarded;
-    if (scan >= to_space + MEM_FOR_GARBAGE || scan == NULL) {
-      gc_collecting = 0;
+  if (scan < next)
+  {
+    size_t forwarded = 0;
+    size_t before_size = next;
+    while (forwarded < size_in_bytes) {
+      stella_object *obj = scan;
+      obj = forward(obj);
+      forwarded = next - before_size; 
+      int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(obj->object_header)+1;
+      scan += sizeof(void *) * fields_count;
+      printf("Forwarded %d\n", next);
+      if (scan > next) goto end;
     }
-  }
-
+    return;
+  } 
+  end:
+    gc_collecting = 0;
+    next = to_space;
+    scan = to_space;
+    last_added = next;
 }
 
 void prepare() {
@@ -104,7 +112,7 @@ void prepare() {
     from_space = to_space;
     to_space = buf;
     last_added = next;
-    next = to_space;
+    //next = to_space;
     limit = from_space + MEM_FOR_GARBAGE-1;
 }
 
@@ -122,16 +130,20 @@ void gc_run(){
 
 
 void* gc_alloc(size_t size_in_bytes) {
-   printf("GC_ALLOC\n");
+   printf("\n\nGC_ALLOC for %d\n", size_in_bytes);
+
+
 
   if (next == NULL) {
       from_space = malloc(MEM_FOR_GARBAGE);
       to_space = malloc(MEM_FOR_GARBAGE);
       
       last_added = from_space;
-      next = from_space;
-      limit = to_space + MEM_FOR_GARBAGE-1;
+      next = to_space;
+      limit = from_space + MEM_FOR_GARBAGE-1;
   }
+
+  print_gc_state();
 
   total_allocated_bytes += size_in_bytes;
   total_allocated_objects += 1;
@@ -146,8 +158,9 @@ void* gc_alloc(size_t size_in_bytes) {
       gc_run();
   }
 
-  if (last_added + size_in_bytes > limit) {  
-      printf("EXIT ENOMEM");
+  if (last_added + size_in_bytes > limit) { 
+      print_gc_state(); 
+      printf("EXIT ENOMEM\n");
       exit(ENOMEM);
   }
 
@@ -159,19 +172,23 @@ void* gc_alloc(size_t size_in_bytes) {
     ptr_to_write = limit;
     limit -= size_in_bytes;
   }
-  printf("GC_ITER\n");
+
+  printf("\nafter allocate\n");
+  print_gc_state();
 
   if (gc_collecting == 1)
   {
+      printf("GC_ITER\n");
       gc_iter(size_in_bytes);
   }
   
+  printf("\nafter iter\n");
+  print_gc_state();
+  printf("\n\n");
+
 
   return ptr_to_write; 
 
-
-
-  //return malloc(size_in_bytes);
 }
 
 void print_gc_roots() {
@@ -192,13 +209,15 @@ void print_gc_alloc_stats() {
 void print_gc_state() {
   printf("GC_STATE\n");
 
-  printf("To space start: %p \n", to_space);
-  printf("Next: %p \n", next);
-  printf("From space start: %p \n", from_space);
-  printf("Last added: %p \n", last_added);
-  printf("Limit: %p \n", limit);
-  printf("Free space: %'lu / %'d", (last_added - limit + 1), MEM_FOR_GARBAGE);
+  printf("To space start: ...%ld \n", (long)to_space % 100000);
+  printf("Next: ...%ld \n",(long) next % 100000);
+  printf("From space start: ...%ld \n", (long) from_space % 100000);
+  printf("Last added: ...%ld \n", (long) last_added % 100000);
+  printf("Limit: ...%ld \n", (long) limit % 100000);
+  printf("Free space: %'ld / %'d \n", (limit - last_added + 1), MEM_FOR_GARBAGE);
   printf("Collecting now?: %'d \n", gc_collecting);
+  printf("Scan:  %'ld \n", (long) scan % 100000);
+
 }
 
 
