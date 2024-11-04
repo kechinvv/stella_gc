@@ -149,7 +149,7 @@ void* gc_alloc(size_t size_in_bytes) {
       
       last_added = from_space;
       next = to_space;
-      limit = from_space + MEM_FOR_GARBAGE-1;
+      limit = from_space + MEM_FOR_GARBAGE;
   }
 
   print_gc_state();
@@ -162,7 +162,7 @@ void* gc_alloc(size_t size_in_bytes) {
   printf("BEFORE GC RUN\n");
 
 
-  if (gc_collecting == 0 && last_added + size_in_bytes >= limit) {
+  if (gc_collecting == 0 && last_added + size_in_bytes > limit) {
       printf("GC RUN\n");
       gc_run();
   }
