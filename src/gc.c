@@ -5,7 +5,7 @@
 #include "runtime.h"
 #include "gc.h"
 
-#define MEM_FOR_GARBAGE 100
+#define MEM_FOR_GARBAGE 300
 
 /** Total allocated number of bytes (over the entire duration of the program). */
 int total_allocated_bytes = 0;
@@ -50,9 +50,10 @@ void chase(stella_object* p){
     stella_object* q = next;
     int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(p->object_header)+1;
     next += sizeof(void *) * fields_count; //todo + size of object? only pointers with same size or primitives?
-    
+    last_added = next;  //while gc working - new obj to the end, forwarded to the next
 
-    void* r = NULL;
+    stella_object* r = NULL;
+    
     q->object_header = p->object_header;
 
     for (int i = 0; i < fields_count; i++) {
@@ -89,14 +90,17 @@ void gc_iter(size_t size_in_bytes){
   {
     size_t forwarded = 0;
     size_t before_size = next;
+    printf("before_size %ld\n", before_size);
     while (forwarded < size_in_bytes) {
-      stella_object *obj = scan;
-      obj = forward(obj);
-      forwarded = next - before_size; 
+      stella_object *obj = (stella_object*) scan;
       int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(obj->object_header)+1;
+      for (int i = 0; i < fields_count; i++) {
+        obj->object_fields[i] = forward(obj->object_fields[i]);
+      }
+      forwarded = next - before_size; 
       scan += sizeof(void *) * fields_count;
-      printf("Forwarded %d\n", next);
-      if (scan > next) goto end;
+      printf("Forwarded %ld\n", forwarded);
+      if (scan >= next) goto end;
     }
     return;
   } 
@@ -104,21 +108,18 @@ void gc_iter(size_t size_in_bytes){
     gc_collecting = 0;
     next = to_space;
     scan = to_space;
-    last_added = next;
 }
 
 void prepare() {
     void* buf = from_space;
     from_space = to_space;
     to_space = buf;
-    last_added = next;
-    //next = to_space;
     limit = from_space + MEM_FOR_GARBAGE-1;
 }
 
 void gc_run(){
   gc_collecting = 1;
-  scan = next;
+  next = scan = to_space;
 
   for (int root_i = 0; root_i < gc_roots_top; root_i++) {
       void **root = gc_roots[root_i];
@@ -131,8 +132,6 @@ void gc_run(){
 
 void* gc_alloc(size_t size_in_bytes) {
    printf("\n\nGC_ALLOC for %d\n", size_in_bytes);
-
-
 
   if (next == NULL) {
       from_space = malloc(MEM_FOR_GARBAGE);
@@ -160,6 +159,7 @@ void* gc_alloc(size_t size_in_bytes) {
 
   if (last_added + size_in_bytes > limit) { 
       print_gc_state(); 
+      print_gc_alloc_stats();
       printf("EXIT ENOMEM\n");
       exit(ENOMEM);
   }
@@ -169,18 +169,20 @@ void* gc_alloc(size_t size_in_bytes) {
     ptr_to_write = last_added;
     last_added += size_in_bytes;
   } else {
+    printf("GC_ITER\n");
+    gc_iter(size_in_bytes);
+
     ptr_to_write = limit;
     limit -= size_in_bytes;
+
+    printf("\nafter iter\n");
+    print_gc_state();
+    printf("\n\n");
   }
 
   printf("\nafter allocate\n");
   print_gc_state();
 
-  if (gc_collecting == 1)
-  {
-      printf("GC_ITER\n");
-      gc_iter(size_in_bytes);
-  }
   
   printf("\nafter iter\n");
   print_gc_state();
@@ -217,7 +219,7 @@ void print_gc_state() {
   printf("Free space: %'ld / %'d \n", (limit - last_added + 1), MEM_FOR_GARBAGE);
   printf("Collecting now?: %'d \n", gc_collecting);
   printf("Scan:  %'ld \n", (long) scan % 100000);
-
+  print_gc_roots();
 }
 
 
@@ -236,11 +238,11 @@ void gc_pop_root(void **ptr){
 }
 
 void gc_read_barrier(void *object, int field_index) {
-    printf("GC_READ_BARRIER\n");
+  printf("GC_READ_BARRIER\n");
 
-  void* s_obj_f = ((stella_object *) object)->object_fields[field_index];
-  if (gc_collecting && points_to_to_space(s_obj_f)) {  //old from space
-      s_obj_f = forward(s_obj_f);
+  stella_object* s_obj = (stella_object *) object;
+  if (gc_collecting && points_to_to_space(s_obj->object_fields[field_index])) {  //old from space
+      s_obj->object_fields[field_index] = forward(s_obj->object_fields[field_index]);
   }
   total_reads += 1;
 }
