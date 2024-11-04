@@ -6,4 +6,6 @@ gcc -std=c11 -DSTELLA_DEBUG -DSTELLA_GC_STATS -DSTELLA_RUNTIME_STATS -DGC_LOGS $
 
 chmod a+x ./out/runnable_example
 
+export GC_SPACE_SIZE=${3:-"1300"}
+
 echo $2 | ./out/runnable_example

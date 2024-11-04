@@ -5,7 +5,7 @@
 #include "runtime.h"
 #include "gc.h"
 
-#define MEM_FOR_GARBAGE 1300
+int MEM_FOR_GARBAGE;
 
 /** Total allocated number of bytes (over the entire duration of the program). */
 int total_allocated_bytes = 0;
@@ -168,6 +168,20 @@ void* gc_alloc(size_t size_in_bytes) {
   #endif
 
   if (next == NULL) {
+      char *str = getenv("GC_SPACE_SIZE");
+      for (int i = 0; str[i] != '\0'; i++) {
+          if (str[i] >= '0' && str[i] <= '9') {
+              MEM_FOR_GARBAGE = MEM_FOR_GARBAGE * 10 + (str[i] - '0');
+          } else {
+              printf("Invalid input\n");
+              exit(EINVAL);
+          }
+      }
+
+      #ifdef GC_LOGS
+      printf("GC SPACE SIZE: %d\n", MEM_FOR_GARBAGE);
+      #endif
+      
       from_space = malloc(MEM_FOR_GARBAGE);
       to_space = malloc(MEM_FOR_GARBAGE);
       
