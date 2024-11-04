@@ -21,6 +21,6 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Build
-      run: ./compile_run.sh ./stella_examples/square_numbers.c 1
+      run: ./compile_run.sh ./stella_examples/factorial.c 4
 
 

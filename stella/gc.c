@@ -5,7 +5,7 @@
 #include "runtime.h"
 #include "gc.h"
 
-#define MEM_FOR_GARBAGE 400
+#define MEM_FOR_GARBAGE 1300
 
 /** Total allocated number of bytes (over the entire duration of the program). */
 int total_allocated_bytes = 0;
@@ -99,27 +99,27 @@ void* forward(void* p) {
 }
 
 void gc_iter(size_t size_in_bytes){
-  long forwarded = 0l;
-  long before_size = next;
-  while (scan < next) {
-    if (forwarded >= before_size) return;
-    
+  //long forwarded = 0l;
+  //long before_size = next;
+  while (scan < next) {                         // loop planning for iterate over bytes > size_in_bytes
+    //if (forwarded > size_in_bytes) return;
+   
     stella_object *obj = (stella_object*) scan;
     int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(obj->object_header);
     for (int i = 0; i < fields_count; i++) {
       obj->object_fields[i] = forward(obj->object_fields[i]);
     }
-    forwarded = next - before_size; 
+    // forwarded = next - before_size; 
     scan += sizeof(void *) * (fields_count+1);
+    if (scan < next) return;
 
-    #ifdef GC_LOGS
+/*     #ifdef GC_LOGS
     printf("Forwarded %ld\n", forwarded);
-    #endif
+    #endif */
   }
   
   gc_collecting = 0;
-  next = to_space;
-  scan = to_space;
+  prepare();
 }
 
 void prepare() {
@@ -154,9 +154,9 @@ void gc_run(){
   
   
 
-  prepare();
 
   #ifdef SIMPLE_COPY
+  prepare();
   gc_collecting = 0;
   #endif
 }
@@ -164,7 +164,7 @@ void gc_run(){
 
 void* gc_alloc(size_t size_in_bytes) {
   #ifdef GC_LOGS
-  printf("\n\nGC_ALLOC for %d\n", size_in_bytes);
+  printf("\n\nGC_ALLOC for %lu\n", size_in_bytes);
   #endif
 
   if (next == NULL) {
@@ -176,7 +176,7 @@ void* gc_alloc(size_t size_in_bytes) {
       limit = from_space + MEM_FOR_GARBAGE;
   }
   #ifdef GC_LOGS
-  printf("BEFORE GC RUN\n");
+  printf("BEFORE GC\n");
   print_gc_state();
   #endif
   total_allocated_bytes += size_in_bytes;
@@ -277,11 +277,11 @@ void gc_read_barrier(void *object, int field_index) {
   
   #ifndef SIMPLE_COPY
   stella_object* s_obj = (stella_object *) object;
-  if (gc_collecting == 1 && points_to_to_space(s_obj->object_fields[field_index])) {  //old from space
+  if (gc_collecting == 1 && points_to_from_space(s_obj->object_fields[field_index])) { 
       s_obj->object_fields[field_index] = forward(s_obj->object_fields[field_index]);
   }
   #endif
-  
+
   total_reads += 1;
 }
 
