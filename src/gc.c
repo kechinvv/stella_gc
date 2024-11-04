@@ -43,13 +43,24 @@ int points_to_to_space(void *p){
  return p >= to_space && p < (to_space + MEM_FOR_GARBAGE);
 }
 
+int check_enomem(size_t size_in_bytes) {
+  if (last_added + size_in_bytes > limit) { 
+      print_gc_state(); 
+      print_gc_alloc_stats();
+      printf("EXIT ENOMEM\n");
+      exit(ENOMEM);
+  }
+}
 
 void chase(stella_object* p){
   do
   {
     stella_object* q = next;
     int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(p->object_header);
-    next += sizeof(void *) * (fields_count + 1); //todo + size of object? only pointers with same size or primitives?
+    size_t size_in_bytes = sizeof(void *) * (fields_count + 1);
+    check_enomem(size_in_bytes);
+
+    next += size_in_bytes; //todo + size of object? only pointers with same size or primitives?
     last_added = next;  //while gc working - new obj to the end, forwarded to the next
 
     stella_object* r = NULL;
@@ -114,12 +125,14 @@ void prepare() {
     void* buf = from_space;
     from_space = to_space;
     to_space = buf;
-    limit = from_space + MEM_FOR_GARBAGE-1;
 }
 
 void gc_run(){
   gc_collecting = 1;
   next = scan = to_space;
+  limit = to_space + MEM_FOR_GARBAGE;
+  last_added = to_space;
+
 
   for (int root_i = 0; root_i < gc_roots_top; root_i++) {
       void **root = gc_roots[root_i];
@@ -152,17 +165,12 @@ void* gc_alloc(size_t size_in_bytes) {
   printf("BEFORE GC RUN\n");
 
 
-  if (gc_collecting == 0 && last_added + size_in_bytes > limit) {
+  if (gc_collecting == 0 && last_added + size_in_bytes >= limit) {
       printf("GC RUN\n");
       gc_run();
   }
 
-  if (last_added + size_in_bytes > limit) { 
-      print_gc_state(); 
-      print_gc_alloc_stats();
-      printf("EXIT ENOMEM\n");
-      exit(ENOMEM);
-  }
+  check_enomem(size_in_bytes);
 
   void* ptr_to_write;
   if (gc_collecting == 0) {
@@ -172,8 +180,8 @@ void* gc_alloc(size_t size_in_bytes) {
     printf("GC_ITER\n");
     gc_iter(size_in_bytes);
 
-    ptr_to_write = limit;
     limit -= size_in_bytes;
+    ptr_to_write = limit;
 
     printf("\nafter iter\n");
     print_gc_state();
