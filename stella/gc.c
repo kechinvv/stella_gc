@@ -97,8 +97,8 @@ void* forward(void* p) {
 }
 
 void gc_iter(size_t size_in_bytes){
-  size_t forwarded = 0;
-  size_t before_size = next;
+  long forwarded = 0l;
+  long before_size = next;
   while (scan < next) {
     if (forwarded >= before_size) return;
     

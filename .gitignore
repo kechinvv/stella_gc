@@ -14,3 +14,4 @@ CMakeUserPresets.json
 bin
 build
 lib
+out
