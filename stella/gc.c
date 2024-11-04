@@ -5,7 +5,7 @@
 #include "runtime.h"
 #include "gc.h"
 
-#define MEM_FOR_GARBAGE 300
+#define MEM_FOR_GARBAGE 200
 
 /** Total allocated number of bytes (over the entire duration of the program). */
 int total_allocated_bytes = 0;
@@ -36,14 +36,14 @@ int gc_collecting = 0;
 
 
 int points_to_from_space(void *p){
- return p >= from_space && p < (from_space + MEM_FOR_GARBAGE);
+ return p != NULL && p >= from_space && p < (from_space + MEM_FOR_GARBAGE);
 }
 
 int points_to_to_space(void *p){
- return p >= to_space && p < (to_space + MEM_FOR_GARBAGE);
+ return p != NULL && p >= to_space && p < (to_space + MEM_FOR_GARBAGE);
 }
 
-int check_enomem(size_t size_in_bytes) {
+void check_enomem(size_t size_in_bytes) {
   if (last_added + size_in_bytes > limit) { 
       print_gc_state(); 
       print_gc_alloc_stats();
@@ -99,7 +99,6 @@ void* forward(void* p) {
 void gc_iter(size_t size_in_bytes){
   size_t forwarded = 0;
   size_t before_size = next;
-  printf("before_size %ld\n", before_size);
   while (scan < next) {
     if (forwarded >= before_size) return;
     
@@ -247,7 +246,7 @@ void gc_read_barrier(void *object, int field_index) {
   printf("GC_READ_BARRIER\n");
 
   stella_object* s_obj = (stella_object *) object;
-  if (gc_collecting && points_to_to_space(s_obj->object_fields[field_index])) {  //old from space
+  if (gc_collecting == 1 && points_to_to_space(s_obj->object_fields[field_index])) {  //old from space
       s_obj->object_fields[field_index] = forward(s_obj->object_fields[field_index]);
   }
   total_reads += 1;
