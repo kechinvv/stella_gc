@@ -5,7 +5,7 @@
 #include "runtime.h"
 #include "gc.h"
 
-#define MEM_FOR_GARBAGE 200
+#define MEM_FOR_GARBAGE 400
 
 /** Total allocated number of bytes (over the entire duration of the program). */
 int total_allocated_bytes = 0;
@@ -139,8 +139,26 @@ void gc_run(){
       void **root = gc_roots[root_i];
       *root = forward(*root);
   }
+  
+  #ifdef SIMPLE_COPY
+  while (scan < next) {
+    
+    stella_object *obj = (stella_object*) scan;
+    int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(obj->object_header);
+    for (int i = 0; i < fields_count; i++) {
+      obj->object_fields[i] = forward(obj->object_fields[i]);
+    }
+    scan += sizeof(void *) * (fields_count+1);
+  }
+  #endif
+  
+  
 
   prepare();
+
+  #ifdef SIMPLE_COPY
+  gc_collecting = 0;
+  #endif
 }
 
 
@@ -257,10 +275,13 @@ void gc_read_barrier(void *object, int field_index) {
   printf("GC_READ_BARRIER\n");
   #endif
   
+  #ifndef SIMPLE_COPY
   stella_object* s_obj = (stella_object *) object;
   if (gc_collecting == 1 && points_to_to_space(s_obj->object_fields[field_index])) {  //old from space
       s_obj->object_fields[field_index] = forward(s_obj->object_fields[field_index]);
   }
+  #endif
+  
   total_reads += 1;
 }
 
