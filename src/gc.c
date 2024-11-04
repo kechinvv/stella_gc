@@ -5,7 +5,7 @@
 #include "runtime.h"
 #include "gc.h"
 
-#define MEM_FOR_GARBAGE 300
+#define MEM_FOR_GARBAGE 200
 
 /** Total allocated number of bytes (over the entire duration of the program). */
 int total_allocated_bytes = 0;
@@ -48,8 +48,8 @@ void chase(stella_object* p){
   do
   {
     stella_object* q = next;
-    int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(p->object_header)+1;
-    next += sizeof(void *) * fields_count; //todo + size of object? only pointers with same size or primitives?
+    int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(p->object_header);
+    next += sizeof(void *) * (fields_count + 1); //todo + size of object? only pointers with same size or primitives?
     last_added = next;  //while gc working - new obj to the end, forwarded to the next
 
     stella_object* r = NULL;
@@ -82,7 +82,7 @@ void* forward(void* p) {
         }
     }
 
-    return (void*) p;
+    return p;
 }
 
 void gc_iter(size_t size_in_bytes){
@@ -93,12 +93,12 @@ void gc_iter(size_t size_in_bytes){
     printf("before_size %ld\n", before_size);
     while (forwarded < size_in_bytes) {
       stella_object *obj = (stella_object*) scan;
-      int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(obj->object_header)+1;
+      int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(obj->object_header);
       for (int i = 0; i < fields_count; i++) {
         obj->object_fields[i] = forward(obj->object_fields[i]);
       }
       forwarded = next - before_size; 
-      scan += sizeof(void *) * fields_count;
+      scan += sizeof(void *) * (fields_count+1);
       printf("Forwarded %ld\n", forwarded);
       if (scan >= next) goto end;
     }
