@@ -44,10 +44,12 @@ int points_to_to_space(void *p){
 }
 
 void check_enomem(size_t size_in_bytes) {
-  if (last_added + size_in_bytes > limit) { 
+  if (last_added + size_in_bytes >= limit) { 
+      #ifdef GC_LOGS
       print_gc_state(); 
       print_gc_alloc_stats();
       printf("EXIT ENOMEM\n");
+      #endif
       exit(ENOMEM);
   }
 }
@@ -109,7 +111,10 @@ void gc_iter(size_t size_in_bytes){
     }
     forwarded = next - before_size; 
     scan += sizeof(void *) * (fields_count+1);
+
+    #ifdef GC_LOGS
     printf("Forwarded %ld\n", forwarded);
+    #endif
   }
   
   gc_collecting = 0;
@@ -140,7 +145,9 @@ void gc_run(){
 
 
 void* gc_alloc(size_t size_in_bytes) {
-   printf("\n\nGC_ALLOC for %d\n", size_in_bytes);
+  #ifdef GC_LOGS
+  printf("\n\nGC_ALLOC for %d\n", size_in_bytes);
+  #endif
 
   if (next == NULL) {
       from_space = malloc(MEM_FOR_GARBAGE);
@@ -150,20 +157,22 @@ void* gc_alloc(size_t size_in_bytes) {
       next = to_space;
       limit = from_space + MEM_FOR_GARBAGE;
   }
-
+  #ifdef GC_LOGS
+  printf("BEFORE GC RUN\n");
   print_gc_state();
-
+  #endif
   total_allocated_bytes += size_in_bytes;
   total_allocated_objects += 1;
   max_allocated_bytes = total_allocated_bytes;
   max_allocated_objects = total_allocated_objects;
 
-  printf("BEFORE GC RUN\n");
 
 
-  if (gc_collecting == 0 && last_added + size_in_bytes > limit) {
-      printf("GC RUN\n");
-      gc_run();
+  if (gc_collecting == 0 && last_added + size_in_bytes >= limit) {
+    #ifdef GC_LOGS
+    printf("GC RUN\n");
+    #endif
+    gc_run();
   }
 
   check_enomem(size_in_bytes);
@@ -173,26 +182,27 @@ void* gc_alloc(size_t size_in_bytes) {
     ptr_to_write = last_added;
     last_added += size_in_bytes;
   } else {
+    #ifdef GC_LOGS
     printf("GC_ITER\n");
+    #endif
     gc_iter(size_in_bytes);
     check_enomem(size_in_bytes);
 
     limit -= size_in_bytes;
     ptr_to_write = limit;
 
+    #ifdef GC_LOGS
     printf("\nafter iter\n");
     print_gc_state();
     printf("\n\n");
+    #endif
   }
 
+  #ifdef GC_LOGS
   printf("\nafter allocate\n");
   print_gc_state();
-
-  
-  printf("\nafter iter\n");
-  print_gc_state();
   printf("\n\n");
-
+  #endif
 
   return ptr_to_write; 
 
@@ -243,8 +253,10 @@ void gc_pop_root(void **ptr){
 }
 
 void gc_read_barrier(void *object, int field_index) {
+  #ifdef GC_LOGS
   printf("GC_READ_BARRIER\n");
-
+  #endif
+  
   stella_object* s_obj = (stella_object *) object;
   if (gc_collecting == 1 && points_to_to_space(s_obj->object_fields[field_index])) {  //old from space
       s_obj->object_fields[field_index] = forward(s_obj->object_fields[field_index]);
