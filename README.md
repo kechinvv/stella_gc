@@ -2,6 +2,8 @@
 
 [![CMake on a single platform](https://github.com/kechinvv/stella_gc/actions/workflows/cmake-single-platform.yml/badge.svg)](https://github.com/kechinvv/stella_gc/actions/workflows/cmake-single-platform.yml)
 
+## Description
+Incremental (Baker's algorithm) copy GC
 ## Build
 
 Run `compile_run.sh` with target `.c` example and program input. 3rd arg is size for GS_SPACE_SIZE (optional, default 1300).
