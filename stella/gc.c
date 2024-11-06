@@ -19,6 +19,9 @@ int max_allocated_objects = 0;
 int total_reads = 0;
 int total_writes = 0;
 
+int total_gc_runs = 0;
+int total_gc_ends = 0;
+
 #define MAX_GC_ROOTS 1024
 
 int gc_roots_max_size = 0;
@@ -34,7 +37,7 @@ void* scan;
 
 int gc_collecting = 0;
 
-
+//check ptr between end and start of spaces
 int points_to_from_space(void *p){
  return p != NULL && p >= from_space && p < (from_space + MEM_FOR_GARBAGE);
 }
@@ -54,6 +57,7 @@ void check_enomem(size_t size_in_bytes) {
   }
 }
 
+// default chase algorithm
 void chase(stella_object* p){
   do
   {
@@ -62,8 +66,9 @@ void chase(stella_object* p){
     size_t size_in_bytes = sizeof(void *) * (fields_count + 1);
     check_enomem(size_in_bytes);
 
-    next += size_in_bytes; //todo + size of object? only pointers with same size or primitives?
-    last_added = next;  //while gc working - new obj to the end, forwarded to the next
+    next += size_in_bytes; 
+    last_added = next;  //while gc working - new obj to the end, forwarded to the next. 
+    //Keep last_added actual value for calculate enomem cond and for adding after g.collecting
 
     stella_object* r = NULL;
     
@@ -83,6 +88,7 @@ void chase(stella_object* p){
   } while (p != NULL);
 }
 
+// default forward algorithm
 void* forward(void* p) {
     if (points_to_from_space(p)) {
         stella_object* stella_p =(stella_object *) p;
@@ -98,6 +104,7 @@ void* forward(void* p) {
     return p;
 }
 
+// part of default GC runner. Call when allocate new memory and forward one object 
 void gc_iter(size_t size_in_bytes){
   //long forwarded = 0l;
   //long before_size = next;
@@ -111,17 +118,20 @@ void gc_iter(size_t size_in_bytes){
     }
     // forwarded = next - before_size; 
     scan += sizeof(void *) * (fields_count+1);
-    if (scan < next) return;
+    if (scan < next) return; // check end of collecting
 
-/*     #ifdef GC_LOGS
-    printf("Forwarded %ld\n", forwarded);
-    #endif */
+  // #ifdef GC_LOGS
+  //  printf("Forwarded %ld\n", forwarded);
+  //  #endif 
   }
   
+  // if Gc finish collecting - change state
   gc_collecting = 0;
+  total_gc_ends += 1;
   prepare();
 }
 
+// swap spaces
 void prepare() {
     void* buf = from_space;
     from_space = to_space;
@@ -129,12 +139,12 @@ void prepare() {
 }
 
 void gc_run(){
-  gc_collecting = 1;
+  gc_collecting = 1;        // flag that gc is working 
   next = scan = to_space;
   limit = to_space + MEM_FOR_GARBAGE;
-  last_added = to_space;
+  last_added = to_space;    //swaped role of spaces. New elements allocate in to-space
 
-
+  // Baker's alg - forward only roots
   for (int root_i = 0; root_i < gc_roots_top; root_i++) {
       void **root = gc_roots[root_i];
       *root = forward(*root);
@@ -168,6 +178,8 @@ void* gc_alloc(size_t size_in_bytes) {
   #endif
 
   if (next == NULL) {
+
+      // set GC_SPACE_SIZE
       char *str = getenv("GC_SPACE_SIZE");
       for (int i = 0; str[i] != '\0'; i++) {
           if (str[i] >= '0' && str[i] <= '9') {
@@ -193,30 +205,37 @@ void* gc_alloc(size_t size_in_bytes) {
   printf("BEFORE GC\n");
   print_gc_state();
   #endif
+
   total_allocated_bytes += size_in_bytes;
   total_allocated_objects += 1;
   max_allocated_bytes = total_allocated_bytes;
   max_allocated_objects = total_allocated_objects;
 
 
-
+  // if gc not worling and end free space has ended - run gc
   if (gc_collecting == 0 && last_added + size_in_bytes >= limit) {
     #ifdef GC_LOGS
     printf("GC RUN\n");
     #endif
+    total_gc_runs += 1;
     gc_run();
   }
 
+  // if after run gc not free space - exit 
   check_enomem(size_in_bytes);
 
   void* ptr_to_write;
+
   if (gc_collecting == 0) {
+    // write to the last added in default order if gc not working
     ptr_to_write = last_added;
     last_added += size_in_bytes;
   } else {
     #ifdef GC_LOGS
     printf("GC_ITER\n");
     #endif
+
+    //if gc worling, decrease limit and add obj from the end of sapce
     gc_iter(size_in_bytes);
     check_enomem(size_in_bytes);
 
@@ -253,6 +272,8 @@ void print_gc_alloc_stats() {
   printf("Maximum residency:       %'d bytes (%'d objects)\n", max_allocated_bytes, max_allocated_objects);
   printf("Total memory use:        %'d reads and %'d writes\n", total_reads, total_writes);
   printf("Max GC roots stack size: %'d roots\n", gc_roots_max_size);
+  printf("GC runs: %'d\n", total_gc_runs);
+  printf("GC ends: %'d\n", total_gc_ends);
 }
 
 void print_gc_state() {
@@ -290,6 +311,7 @@ void gc_read_barrier(void *object, int field_index) {
   #endif
   
   #ifndef SIMPLE_COPY
+  // part of Baker's alg. If reading field in from space when gc working - forward it.
   stella_object* s_obj = (stella_object *) object;
   if (gc_collecting == 1 && points_to_from_space(s_obj->object_fields[field_index])) { 
       s_obj->object_fields[field_index] = forward(s_obj->object_fields[field_index]);

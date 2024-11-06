@@ -14,6 +14,8 @@ or build manually
 ```
 gcc -std=c11 -DSTELLA_DEBUG -DSTELLA_GC_STATS -DSTELLA_RUNTIME_STATS example/path.c stella/runtime.c stella/gc.c stella/runtime.h stella/gc.h -o ./out/runnable_example
 ```
+
+If not enough memory - exit with ENOMEM (12)
 ## Additional flags
 `-DGC_LOGS` - enable gc logs
 `-DSIMPLE_COPY` - simple copy gc mode
