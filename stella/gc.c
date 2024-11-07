@@ -31,8 +31,13 @@ void **gc_roots[MAX_GC_ROOTS];
 void *from_space;
 void *to_space;
 void *next;
+
 void *last_added;
 void *limit;
+
+void *old_last_added;
+void *old_limit;
+
 void* scan;
 
 int gc_collecting = 0;
@@ -141,6 +146,10 @@ void prepare() {
 void gc_run(){
   gc_collecting = 1;        // flag that gc is working 
   next = scan = to_space;
+
+  old_limit = limit; // remember values of old active space
+  old_last_added = last_added;  
+
   limit = to_space + MEM_FOR_GARBAGE;
   last_added = to_space;    //swaped role of spaces. New elements allocate in to-space
 
@@ -162,9 +171,6 @@ void gc_run(){
   }
   #endif
   
-  
-
-
   #ifdef SIMPLE_COPY
   prepare();
   gc_collecting = 0;
@@ -200,6 +206,9 @@ void* gc_alloc(size_t size_in_bytes) {
       last_added = from_space;
       next = to_space;
       limit = from_space + MEM_FOR_GARBAGE;
+
+      old_last_added = to_space;
+      old_limit = to_space + MEM_FOR_GARBAGE;
   }
   #ifdef GC_LOGS
   printf("BEFORE GC\n");
@@ -267,6 +276,36 @@ void print_gc_roots() {
   printf("\n");
 }
 
+
+
+void print_s_object(stella_object* stella_obj, int id, int fields_count) {
+      const int object_header = STELLA_OBJECT_HEADER_TAG(stella_obj->object_header);
+      printf("    (%d) Stella obj: %p  Header: %d  Fields: ", id, stella_obj, object_header);
+      for (int i = 0; i < fields_count; i++) printf("  %p", stella_obj->object_fields[i]);
+      printf("\n");
+}
+
+void print_mem_slice(void* start, void* end, int *id) {
+  if (end == to_space || end == from_space) return;
+  
+  void *obj = start;
+  while (obj < end) {
+      stella_object *stella_obj = obj;
+      int fields_count = STELLA_OBJECT_HEADER_FIELD_COUNT(stella_obj->object_header);
+      print_s_object(stella_obj, (*id)++, fields_count);
+      obj += (fields_count+1)*sizeof(void*);
+  }
+}
+
+void print_space(void *space, void *added, void *lim) {
+  if (last_added == to_space) return;
+  int id = 0;
+  printf("    Start:\n");
+  print_mem_slice(space, added, &id);
+  printf("    Limit:\n");
+  print_mem_slice(lim, space + MEM_FOR_GARBAGE, &id);
+}
+
 void print_gc_alloc_stats() {
   printf("Total memory allocation: %'d bytes (%'d objects)\n", total_allocated_bytes, total_allocated_objects);
   printf("Maximum residency:       %'d bytes (%'d objects)\n", max_allocated_bytes, max_allocated_objects);
@@ -279,15 +318,27 @@ void print_gc_alloc_stats() {
 void print_gc_state() {
   printf("GC_STATE\n");
 
-  printf("To space start: ...%ld \n", (long)to_space % 100000);
-  printf("Next: ...%ld \n",(long) next % 100000);
-  printf("From space start: ...%ld \n", (long) from_space % 100000);
-  printf("Last added: ...%ld \n", (long) last_added % 100000);
-  printf("Limit: ...%ld \n", (long) limit % 100000);
+  printf("To space : ...%ld - ...%ld    (%p - %p)\n", (long)to_space % 100000, (long)(to_space + MEM_FOR_GARBAGE) % 100000, to_space, to_space + MEM_FOR_GARBAGE);
+  printf("Next: ...%ld    (%p)\n",(long) next % 100000, next);
+  printf("From space : ...%ld - ...%ld    (%p - %p)\n", (long) from_space % 100000, (long)(from_space + MEM_FOR_GARBAGE) % 100000, from_space, from_space + MEM_FOR_GARBAGE);
+  printf("Last added: ...%ld    (%p)\n", (long) last_added % 100000, last_added);
+  printf("Limit: ...%ld    (%p)\n", (long) limit % 100000, limit);
   printf("Free space: %'ld / %'d \n", (limit - last_added + 1), MEM_FOR_GARBAGE);
-  printf("Collecting now?: %'d \n", gc_collecting);
-  printf("Scan:  %'ld \n", (long) scan % 100000);
+  printf("Collecting now: %'d \n", gc_collecting);
+  printf("Scan:  %'ld    (%p)\n", (long) scan % 100000, scan);
   print_gc_roots();
+  if (gc_collecting == 1)
+  {
+    printf("FROM SPACE STATE:\n");
+    print_space(from_space, old_last_added, old_limit);
+    printf("TO SPACE STATE (active):\n");
+    print_space(to_space, last_added, limit);
+  } else {
+    printf("FROM SPACE STATE (active):\n");
+    print_space(from_space, last_added, limit);
+    printf("FROM TO STATE:\n");
+    print_space(from_space, old_last_added, old_limit);
+  }
 }
 
 
