@@ -269,9 +269,9 @@ void* gc_alloc(size_t size_in_bytes) {
 }
 
 void print_gc_roots() {
-  printf("ROOTS: ");
+  printf("ROOTS: \n");
   for (int i = 0; i < gc_roots_top; i++) {
-    printf("%p ", gc_roots[i]);
+    printf("(%d)  %p  points to  %p\n", i, gc_roots[i], *gc_roots[i]);
   }
   printf("\n");
 }
