@@ -23,3 +23,29 @@ If not enough memory - exit with ENOMEM (12)
 ## ENV
 
 `GC_SPACE_SIZE` - int (auto set in `compile_run.sh`).
+
+## Printing
+
+##### GC STATE
+
+In braces - default addresses in hex. Before hex address - int converted last digits for easy debug.
+
+Collecting now - show GC state. If == 1 then collecting (new objects to the end of to space). If == 0 - not collecting (new objects to from space).
+
+![gcstate](./pics/gcstate1.png)
+
+![gcstate](./pics/gcstate2.png)
+
+![gcstate](./pics/gcstate3.png)
+
+Mark `active` - new objects allocate to this space. If gc working - to space, else - from space.
+
+![gcstate](./pics/gcstate4.png)
+
+![gcstate](./pics/gcstate5.png)
+
+##### STATS
+
+Only 1 change from origin - print count of read barrier's forward (last line)
+
+![gcstate](./pics/gcstats.png)
