@@ -19,6 +19,8 @@ int max_allocated_objects = 0;
 int total_reads = 0;
 int total_writes = 0;
 
+int total_read_barrier_active = 0;
+
 int total_gc_runs = 0;
 int total_gc_ends = 0;
 
@@ -313,6 +315,7 @@ void print_gc_alloc_stats() {
   printf("Max GC roots stack size: %'d roots\n", gc_roots_max_size);
   printf("GC runs: %'d\n", total_gc_runs);
   printf("GC ends: %'d\n", total_gc_ends);
+  printf("Read barrier forwards: %d\n", total_read_barrier_active);
 }
 
 void print_gc_state() {
@@ -366,6 +369,7 @@ void gc_read_barrier(void *object, int field_index) {
   // part of Baker's alg. If reading field in from space when gc working - forward it.
   stella_object* s_obj = (stella_object *) object;
   if (gc_collecting == 1 && points_to_from_space(s_obj->object_fields[field_index])) { 
+      total_read_barrier_active++;
       s_obj->object_fields[field_index] = forward(s_obj->object_fields[field_index]);
   }
   #endif
