@@ -324,6 +324,7 @@ void print_gc_state() {
   printf("Last added: ...%ld    (%p)\n", (long) last_added % 100000, last_added);
   printf("Limit: ...%ld    (%p)\n", (long) limit % 100000, limit);
   printf("Free space: %'ld / %'d \n", (limit - last_added + 1), MEM_FOR_GARBAGE);
+  printf("Used space: %'ld / %'d \n", (MEM_FOR_GARBAGE-(limit - last_added + 1)), MEM_FOR_GARBAGE);
   printf("Collecting now: %'d \n", gc_collecting);
   printf("Scan:  %'ld    (%p)\n", (long) scan % 100000, scan);
   print_gc_roots();
